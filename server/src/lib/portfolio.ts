@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { put, head } from "@vercel/blob";
 
 export type Experience = { id: string; role: string; company: string; location?: string; period: string; description: string; highlights?: string[] };
 export type Project = { id: string; title: string; category: string; summary: string; stack: string[]; url: string; theme: "ember" | "violet" | "mint"; image?: string };
@@ -18,23 +17,29 @@ export const starterPortfolio: Portfolio = {
   ],
 };
 
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
-const PORTFOLIO_FILE = path.join(DATA_DIR, "portfolio.json");
+const PORTFOLIO_BLOB_PATH = "portfolio/content.json";
 
-export function readPortfolio(): Portfolio {
+export async function readPortfolio(): Promise<Portfolio> {
   try {
-    if (!fs.existsSync(PORTFOLIO_FILE)) return starterPortfolio;
-    const raw = fs.readFileSync(PORTFOLIO_FILE, "utf-8");
-    return { ...starterPortfolio, ...JSON.parse(raw) };
+    const blob = await head(PORTFOLIO_BLOB_PATH).catch(() => null);
+    if (!blob) return starterPortfolio;
+    const response = await fetch(blob.url, { cache: "no-store" });
+    if (!response.ok) return starterPortfolio;
+    const data = await response.json();
+    return { ...starterPortfolio, ...data };
   } catch (error) {
     console.error("Portfolio content unavailable", error);
     return starterPortfolio;
   }
 }
 
-export function writePortfolio(portfolio: Portfolio): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(PORTFOLIO_FILE, JSON.stringify(portfolio, null, 2), "utf-8");
+export async function writePortfolio(portfolio: Portfolio): Promise<void> {
+  await put(PORTFOLIO_BLOB_PATH, JSON.stringify(portfolio), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  });
 }
 
 export function cleanPortfolio(input: unknown): Portfolio {

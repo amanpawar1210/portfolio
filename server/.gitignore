@@ -1,7 +1,4 @@
 node_modules/
 dist/
 .env
-data/*.json
-data/*.pdf
-data/projects/
-!data/.gitkeep
+.vercel/
