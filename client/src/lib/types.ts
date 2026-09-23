@@ -1,0 +1,3 @@
+export type Experience = { id: string; role: string; company: string; location?: string; period: string; description: string; highlights?: string[] };
+export type Project = { id: string; title: string; category: string; summary: string; stack: string[]; url: string; theme: "ember" | "violet" | "mint"; image?: string };
+export type Portfolio = { name: string; designation: string; headline: string; introduction: string; location: string; availability: string; email: string; github: string; linkedin: string; cvUrl: string; years: string; skills: string[]; experience: Experience[]; projects: Project[] };
