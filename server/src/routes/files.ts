@@ -6,7 +6,7 @@ import { requireOwner } from "../lib/owner";
 
 type FileDoc = { _id: string | ObjectId; kind: "cv" | "image"; contentType: string; name: string; size: number; data: Binary; createdAt: Date };
 
-const cvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5_000_000 } });
+const cvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4_000_000 } });
 const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4_000_000 } });
 
 // Check real file signatures instead of trusting the browser-sent MIME type.
@@ -46,7 +46,7 @@ cvRouter.get("/meta", async (_req, res, next) => {
 cvRouter.post("/", requireOwner, (req, res, next) => {
   cvUpload.single("cv")(req, res, async uploadError => {
     const file = req.file;
-    if (uploadError || !file || file.size < 10) return res.status(400).json({ error: "Choose a PDF smaller than 5 MB" });
+    if (uploadError || !file || file.size < 10) return res.status(400).json({ error: "Choose a PDF smaller than 4 MB" });
     if (file.buffer.subarray(0, 5).toString("utf-8") !== "%PDF-") return res.status(400).json({ error: "The selected file is not a valid PDF" });
     try {
       const db = await getDb();

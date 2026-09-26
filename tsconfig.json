@@ -1,0 +1,17 @@
+{
+  // Used by Vercel to compile the serverless entry (api/index.ts) and the
+  // Express code it imports. The client and server keep their own configs.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["api", "server/src"]
+}

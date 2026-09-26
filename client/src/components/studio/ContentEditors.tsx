@@ -181,7 +181,7 @@ export function LinksEditor({ data, set }: EditorProps) {
   const upload = async (file: File | undefined) => {
     if (!file) return;
     if (file.type !== "application/pdf") { toast("Choose a PDF file", "error"); return; }
-    if (file.size > 5_000_000) { toast("The PDF must be under 5 MB", "error"); return; }
+    if (file.size > 4_000_000) { toast("The PDF must be under 4 MB", "error"); return; }
     setBusy(true);
     try {
       const result = await uploadCv(file);
@@ -202,7 +202,7 @@ export function LinksEditor({ data, set }: EditorProps) {
         <Text label="X / Twitter URL" type="url" value={data.twitter} placeholder="https://x.com/…" onChange={v => set("twitter", v)}/>
       </div>
     </Panel>
-    <Panel title="Your CV" text="Upload a PDF under 5 MB. A new upload replaces the previous file.">
+    <Panel title="Your CV" text="Upload a PDF under 4 MB. A new upload replaces the previous file.">
       <div className={`cv-drop${over ? " over" : ""}`} onDragOver={event => { event.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={event => { event.preventDefault(); setOver(false); void upload(event.dataTransfer.files[0]); }}>
         {busy ? <Loader2 className="spin" size={30}/> : cv ? <FileText size={30}/> : <UploadCloud size={30}/>}
         <div>

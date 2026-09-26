@@ -24,11 +24,11 @@ profile-strength checklist; and version history with one-click restore
 honeypot field against spam bots. Uploads are checked by their real file
 signature, not the file extension.
 
-Two apps, both deployable to Vercel:
+Two apps in one repo, deployed together as one Vercel project:
 
 - **`client/`**: React + Vite single-page app, deployed as a static site.
 - **`server/`**: Express API, deployed as a Vercel serverless function
-  (`server/api/index.ts`).
+  (`api/index.ts`) in the same project and on the same domain as the site.
 
 All data (content, save history, CV, images, messages, analytics) is stored in
 MongoDB, in the `portfolio` database. The name is fixed in code, so a shared
@@ -73,52 +73,51 @@ Run them individually with `npm run dev:client` / `npm run dev:server`.
 npm run build
 ```
 
-This builds the server (`server/dist` — used only for local `npm start`,
-not for the Vercel deployment, which builds `server/api` itself) and the
-client (`client/dist`, a static site).
+This builds the server (`server/dist`, used only for local `npm start`) and the
+client (`client/dist`, the static site).
 
-## Deploying — two separate Vercel projects
+## Deploying to Vercel (one project)
 
-Import this repo into Vercel **twice**, once per app. Each import asks for
-a Root Directory — pick carefully, since Vercel's auto-detection can guess
-wrong on a monorepo like this (it may default to `./` or auto-select the
-wrong subfolder):
+The site and the API are deployed together as **one Vercel project** on one
+domain. The React app is served as static files, and every `/api/*` request
+goes to a serverless function (`api/index.ts`) that runs the Express app. Using
+one domain keeps the owner-login cookie first-party, so the studio works in
+every browser (including Safari), and there is no CORS to configure.
 
-### 1. Client project
+1. Push this repo to GitHub.
+2. In Vercel, choose **Add New → Project** and import the repo. Leave
+   **Root Directory** as `./`. The root `vercel.json` supplies the install and
+   build commands, output folder, and routing.
+3. Add these environment variables, then deploy:
 
-- Root Directory: `client`
-- Framework Preset: **Vite** (confirm this explicitly — don't rely on
-  auto-detect)
-- Environment variable: `VITE_API_URL` = the server project's URL once you
-  have it (e.g. `https://portfolio-server-xxxx.vercel.app`). Leave blank
-  until the server is deployed, then add it and redeploy.
+   | Name | Value |
+   |---|---|
+   | `MONGODB_URI` | your Atlas connection string |
+   | `OWNER_PASSWORD` | a strong studio password |
+   | `SESSION_SECRET` | a long random string (`openssl rand -hex 32`) |
+   | `NODE_ENV` | `production` |
 
-### 2. Server project
+4. In MongoDB Atlas, open **Network Access** and allow `0.0.0.0/0`. Vercel
+   has no fixed IP addresses; the database password still protects your data.
 
-- Root Directory: `server`
-- Framework Preset: **Other** (this repo's own `server/vercel.json` +
-  `server/api/index.ts` handle the routing explicitly — don't let Vercel's
-  "Express" auto-preset take over)
-- Environment variables:
-  - `OWNER_PASSWORD` — your real studio login password
-  - `CLIENT_ORIGIN` — the client project's URL (comma-separated if you
-    have more than one, e.g. a preview + production domain)
-  - `MONGODB_URI`: your MongoDB connection string
-  - `SESSION_SECRET`: a long random string
-  - `NODE_ENV` = `production` (Vercel sets this automatically, so there's
-    nothing to do)
+Upload limits: Vercel accepts request bodies up to 4.5 MB, so the CV limit is
+4 MB and images are limited to 4 MB each.
 
-**MongoDB Atlas:** under Network Access, allow `0.0.0.0/0`, because Vercel
-has no fixed IP addresses. Then add `MONGODB_URI` and `SESSION_SECRET` to the
-server project's environment variables.
+### Adding a custom domain (e.g. from GoDaddy)
 
-Once both projects are deployed, go back to the **client** project's
-environment variables, set `VITE_API_URL` to the server's URL, and
-redeploy the client so it actually points at the live API.
+The site stays hosted on Vercel; GoDaddy only provides the domain name.
 
-The owner-session cookie is set with `SameSite=None; Secure` in production
-so it works across the two separate `*.vercel.app` domains — both are
-served over HTTPS by default on Vercel, so this works out of the box.
+1. In Vercel, open your project, go to **Settings → Domains**, and add
+   `yourdomain.com` and `www.yourdomain.com`.
+2. Vercel shows the DNS records to create. In GoDaddy, open **My Products →
+   DNS** for the domain and add them. This is usually an `A` record for `@`
+   pointing to Vercel's IP address, and a `CNAME` for `www` pointing to
+   `cname.vercel-dns.com`.
+3. Wait for DNS to update (minutes to a few hours). Vercel issues the HTTPS
+   certificate automatically.
+
+No code changes are needed, because the site and API move to the new domain
+together.
 
 ## Project structure
 
@@ -132,8 +131,9 @@ client/src/
     studio/           dashboard, inbox, history, section editors, form fields
   lib/                api, types, hooks, context (data/theme/toasts), track
   styles/             base.css (tokens + light/dark), site.css, studio.css
+api/index.ts          Vercel serverless entry (exports the Express app)
+vercel.json           one-project build + routing for Vercel
 server/
-  api/index.ts        Vercel serverless entry (exports the Express app)
   src/
     index.ts          local dev entry (app.listen)
     app.ts            middleware + route mounting + error handler

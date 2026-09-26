@@ -8,7 +8,7 @@ const LOCK_WINDOW_MS = 15 * 60 * 1000;
 
 function cookieOptions(): CookieOptions {
   const isProd = process.env.NODE_ENV === "production";
-  return { httpOnly: true, secure: isProd, sameSite: isProd ? "none" : "lax", path: "/", maxAge: OWNER_COOKIE_MAX_AGE_MS };
+  return { httpOnly: true, secure: isProd, sameSite: "lax", path: "/", maxAge: OWNER_COOKIE_MAX_AGE_MS };
 }
 
 router.post("/owner-login", async (req, res, next) => {

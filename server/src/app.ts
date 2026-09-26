@@ -13,14 +13,13 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "")
   .map(origin => origin.trim())
   .filter(Boolean);
 
-if (isProd && allowedOrigins.length === 0) {
-  console.warn("CLIENT_ORIGIN is not set — cross-origin requests with credentials will be rejected in production.");
-}
 
 const app = express();
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+// In production the site and API share one origin, so CORS is only needed if
+// CLIENT_ORIGIN lists extra origins (e.g. a separately hosted front end).
 app.use(cors({
   origin: isProd ? allowedOrigins : true,
   credentials: true,
