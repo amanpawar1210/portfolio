@@ -1,17 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aman Pawar — Software Engineer</title>
+    <meta name="description" content="Software Engineer building enterprise Angular, React and full-stack products. Case studies, experience and contact." />
+    <meta name="theme-color" content="#070816" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Aman Pawar — Software Engineer" />
+    <meta property="og:description" content="Enterprise Angular, React and full-stack products engineered for real-world complexity." />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <title>Aman Pawar — Software Engineer</title>
-    <meta name="description" content="Software Engineer building enterprise Angular, React and full-stack products." />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <script>
+      // Apply the saved / system theme before first paint to avoid a flash.
+      try {
+        var saved = localStorage.getItem("ps-theme");
+        var theme = saved === "light" || saved === "dark" ? saved : (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
   </head>
-  <body class="antialiased">
+  <body>
     <div id="root"></div>
+    <noscript>This portfolio needs JavaScript to run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

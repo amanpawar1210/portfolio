@@ -1,34 +1,41 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { LockKeyhole } from "lucide-react";
 import PortfolioEditor from "../components/PortfolioEditor";
 import { fetchPortfolio, ownerSession } from "../lib/api";
+import { markOwner } from "../lib/track";
 import type { Portfolio } from "../lib/types";
+import { LoadError, LoadingScreen } from "./Home";
 
 export default function Studio() {
-  const [status, setStatus] = useState<"loading" | "denied" | "ready">("loading");
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const navigate = useNavigate();
+  const [state, setState] = useState<{ status: "loading" | "denied" | "error" | "ready"; portfolio?: Portfolio; updatedAt?: string | null; error?: string }>({ status: "loading" });
 
-  useEffect(() => {
+  const load = () => {
+    setState({ status: "loading" });
     (async () => {
-      const session = await ownerSession().catch(() => ({ isOwner: false }));
-      if (!session.isOwner) { setStatus("denied"); return; }
-      const result = await fetchPortfolio();
-      setPortfolio(result.portfolio);
-      setStatus("ready");
+      try {
+        const session = await ownerSession();
+        markOwner(session.isOwner);
+        if (!session.isOwner) { setState({ status: "denied" }); return; }
+        const result = await fetchPortfolio();
+        setState({ status: "ready", portfolio: result.portfolio, updatedAt: result.updatedAt });
+      } catch (error) {
+        setState({ status: "error", error: error instanceof Error ? error.message : "Could not load the studio" });
+      }
     })();
-  }, []);
+  };
+  useEffect(load, []);
 
-  if (status === "loading") return <main className="studio-access page-loading-light" aria-busy="true"><span>OWNER STUDIO</span><h1>Loading…</h1></main>;
-
-  if (status === "denied") {
-    return <main className="studio-access">
-      <span>OWNER STUDIO</span>
+  if (state.status === "loading") return <LoadingScreen/>;
+  if (state.status === "error") return <LoadError message={state.error ?? ""} retry={load}/>;
+  if (state.status === "denied") {
+    return <main className="page-loading page-error">
+      <LockKeyhole size={34}/>
       <h1>This studio is private.</h1>
       <p>Sign in as the owner to edit this site.</p>
-      <Link to="/owner-login">Sign in</Link>
-      <Link to="/">View portfolio</Link>
+      <div className="row-actions"><button className="primary-button" onClick={() => navigate("/owner-login")}>Sign in</button><Link className="ghost-button" to="/">View portfolio</Link></div>
     </main>;
   }
-
-  return <PortfolioEditor initial={portfolio!} />;
+  return <PortfolioEditor initial={state.portfolio!} initialUpdatedAt={state.updatedAt ?? null}/>;
 }

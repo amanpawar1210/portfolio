@@ -1,21 +1,38 @@
 # Portfolio Studio
 
-A personal portfolio site with a password-protected owner studio for editing
-content and uploading a CV/project images — no code changes needed to
-update the site.
+A personal portfolio with a password-protected owner studio. Every section,
+the CV and project screenshots are editable from the browser, so updating the
+site needs no code changes.
 
-Two independent apps, both deployable to Vercel for free:
+**Public site:** a hero with a typed role line and a live local-time clock,
+count-up stats, projects you can filter by tech, a case-study page per project
+(`/work/:id`), an expandable experience timeline, education, certifications,
+achievements, testimonials and a contact form that saves to an inbox. It also
+has a Ctrl+K / `/` command palette, a light/dark theme, scroll animations, and
+layouts for phone and desktop.
 
-- **`client/`** — React + Vite single-page app (the public portfolio, the
-  owner-login screen, and the studio editor). Deploys as a static site.
-- **`server/`** — Express API, deployed as a Vercel serverless function
-  (`server/api/index.ts`). Handles portfolio content, CV upload/download,
-  project image upload, and owner authentication.
+**Owner studio (`/studio`):** an analytics dashboard (views, visitors, CV
+downloads, top projects, referrers, recent activity); a message inbox with
+read, star, reply and delete; editors for every section with a live
+side-by-side preview; drag-to-reorder lists; drag-and-drop image and CV
+uploads; Ctrl+S to save; a warning before leaving with unsaved changes; a
+profile-strength checklist; and version history with one-click restore
+(the last 20 saves).
 
-Portfolio content, the CV file, and project images are stored in
-[Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — no database,
-and no persistent disk required (which serverless platforms don't provide
-anyway).
+**Security:** the owner session is a signed, HTTP-only cookie. Login locks for
+15 minutes after 5 wrong attempts. The contact form is rate-limited and has a
+honeypot field against spam bots. Uploads are checked by their real file
+signature, not the file extension.
+
+Two apps, both deployable to Vercel:
+
+- **`client/`**: React + Vite single-page app, deployed as a static site.
+- **`server/`**: Express API, deployed as a Vercel serverless function
+  (`server/api/index.ts`).
+
+All data (content, save history, CV, images, messages, analytics) is stored in
+MongoDB, in the `portfolio` database. The name is fixed in code, so a shared
+cluster's other databases are never touched.
 
 ## Prerequisites
 
@@ -30,14 +47,8 @@ cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
-Edit `server/.env` and set `OWNER_PASSWORD` to whatever you want the studio
-login password to be.
-
-For local development to actually persist saved content/uploads, `server/.env`
-also needs `BLOB_READ_WRITE_TOKEN` — see "Setting up Vercel Blob" below.
-Without it, the server still runs and the public site still works (it falls
-back to the built-in starter content), but saving/uploading from `/studio`
-will fail until the token is set.
+Edit `server/.env`: set `OWNER_PASSWORD` (the studio login),
+`SESSION_SECRET` (any long random string) and `MONGODB_URI`.
 
 ## Development
 
@@ -92,15 +103,14 @@ wrong subfolder):
   - `OWNER_PASSWORD` — your real studio login password
   - `CLIENT_ORIGIN` — the client project's URL (comma-separated if you
     have more than one, e.g. a preview + production domain)
-  - `NODE_ENV` = `production` (Vercel sets this automatically — no action
-    needed)
+  - `MONGODB_URI`: your MongoDB connection string
+  - `SESSION_SECRET`: a long random string
+  - `NODE_ENV` = `production` (Vercel sets this automatically, so there's
+    nothing to do)
 
-**Setting up Vercel Blob** (do this on the server project): open the
-project → **Storage** tab → **Create Database** → **Blob** → connect it to
-this project. Vercel automatically injects `BLOB_READ_WRITE_TOKEN` into the
-server project's environment — no manual copying needed for the deployed
-app. For local development, copy that same token's value from the Storage
-tab into `server/.env`.
+**MongoDB Atlas:** under Network Access, allow `0.0.0.0/0`, because Vercel
+has no fixed IP addresses. Then add `MONGODB_URI` and `SESSION_SECRET` to the
+server project's environment variables.
 
 Once both projects are deployed, go back to the **client** project's
 environment variables, set `VITE_API_URL` to the server's URL, and
@@ -113,19 +123,20 @@ served over HTTPS by default on Vercel, so this works out of the box.
 ## Project structure
 
 ```
-client/
-  src/
-    pages/         Home, OwnerLogin, Studio (route-level components)
-    components/    PortfolioView (public site), PortfolioEditor (studio UI)
-    lib/           api.ts (fetch wrapper), types.ts
-    styles/        portfolio.css, theme.css, polish.css, globals.css
+client/src/
+  pages/              Home, ProjectPage (/work/:id), OwnerLogin, Studio, NotFound
+  components/
+    PortfolioView     public home page sections
+    PortfolioEditor   studio shell (sidebar, save bar, live preview)
+    site/             header, command palette, contact form, project art
+    studio/           dashboard, inbox, history, section editors, form fields
+  lib/                api, types, hooks, context (data/theme/toasts), track
+  styles/             base.css (tokens + light/dark), site.css, studio.css
 server/
-  api/
-    index.ts        Vercel serverless function entry point (exports the Express app)
+  api/index.ts        Vercel serverless entry (exports the Express app)
   src/
-    index.ts        Local dev entry point (calls app.listen — not used in deployment)
-    app.ts           Express app + middleware + route mounting
-    routes/          portfolio.ts, cv.ts, project-image.ts, auth.ts
-    lib/             portfolio.ts (Blob storage + validation), owner.ts (auth)
-  vercel.json        Rewrites all requests to the single serverless function
+    index.ts          local dev entry (app.listen)
+    app.ts            middleware + route mounting + error handler
+    routes/           portfolio (+ revisions), files (cv, images), messages, analytics, auth
+    lib/              db (MongoDB), portfolio (model + validation), owner (auth), rate-limit
 ```

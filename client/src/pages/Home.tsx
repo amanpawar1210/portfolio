@@ -1,19 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { RotateCw } from "lucide-react";
 import PortfolioView from "../components/PortfolioView";
-import { fetchPortfolio } from "../lib/api";
-import type { Portfolio } from "../lib/types";
+import { usePortfolio } from "../lib/context";
+import { track } from "../lib/track";
+
+export function LoadingScreen() {
+  return <main className="page-loading" aria-busy="true" aria-label="Loading"><span className="page-loading-mark"/></main>;
+}
+
+export function LoadError({ message, retry }: { message: string; retry: () => void }) {
+  return <main className="page-loading page-error" role="alert"><h1>Couldn&apos;t load the portfolio</h1><p>{message}</p><button className="primary-button" onClick={retry}><RotateCw size={16}/> Try again</button></main>;
+}
 
 export default function Home() {
-  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [error, setError] = useState("");
+  const { portfolio, error, reload } = usePortfolio();
+  const location = useLocation();
 
   useEffect(() => {
-    fetchPortfolio()
-      .then(result => setPortfolio(result.portfolio))
-      .catch(err => setError(err instanceof Error ? err.message : "Could not load portfolio"));
-  }, []);
+    if (!portfolio) return;
+    document.title = `${portfolio.name} — ${portfolio.designation}`;
+    track("view", "", true);
+  }, [portfolio]);
 
-  if (error) return <main className="portfolio-site"><p style={{ padding: 40 }}>{error}</p></main>;
-  if (!portfolio) return <main className="portfolio-site page-loading" aria-busy="true"><span className="page-loading-mark">AP</span></main>;
-  return <PortfolioView portfolio={portfolio} />;
+  // Honour /#section links (e.g. coming back from a case study).
+  useEffect(() => {
+    if (!portfolio || !location.hash) return;
+    const timer = setTimeout(() => document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: "smooth" }), 80);
+    return () => clearTimeout(timer);
+  }, [portfolio, location.hash]);
+
+  if (error) return <LoadError message={error} retry={reload}/>;
+  if (!portfolio) return <LoadingScreen/>;
+  return <PortfolioView portfolio={portfolio}/>;
 }

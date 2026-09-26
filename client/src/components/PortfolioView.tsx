@@ -1,97 +1,281 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, Check, Copy, Download, Menu, X } from "lucide-react";
-import type { Portfolio } from "../lib/types";
+import { ArrowDown, ArrowRight, ArrowUpRight, Award, Check, ChevronLeft, ChevronRight, Clock, Cloud, Copy, Download, Gauge, GraduationCap, Layers, MapPin, Monitor, Palette, Quote, ServerCog, ShieldCheck, Sparkles, Trophy, Workflow } from "lucide-react";
+import { GithubIcon, LinkedinIcon } from "./site/BrandIcons";
+import type { Portfolio, Project, Stat } from "../lib/types";
+import { fileUrl } from "../lib/api";
+import { useToast } from "../lib/context";
+import { initials, prefersReducedMotion, useActiveSection, useCountUp, useLocalTime, useReveal, useTypewriter } from "../lib/hooks";
+import { track } from "../lib/track";
+import { SiteChrome, sectionsFor, useSectionNav } from "./site/Chrome";
+import ProjectArt from "./site/ProjectArt";
+import ContactForm from "./site/ContactForm";
+import { Intro, Ticker, useMotionEffects, usePointerTilt } from "../lib/motion";
 
 export default function PortfolioView({ portfolio }: { portfolio: Portfolio }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [pointer, setPointer] = useState({ x: 68, y: 24 });
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [activeSection, setActiveSection] = useState("top");
-  const [emailCopied, setEmailCopied] = useState(false);
+  const sections = sectionsFor(portfolio);
+  const active = useActiveSection(["top", ...sections.map(section => section.id)]);
+  const number = (id: string) => String(sections.findIndex(section => section.id === id) + 1).padStart(2, "0");
+  useReveal([portfolio]);
+  useMotionEffects([portfolio]);
 
+  return <SiteChrome portfolio={portfolio} active={active}>
+    <Intro name={portfolio.name}/>
+    <Hero portfolio={portfolio}/>
+    <Ticker items={portfolio.skills}/>
+    {portfolio.stats.length > 0 && <section className="stats-bar" aria-label="Highlights">{portfolio.stats.map((stat, index) => <StatTile key={index} stat={stat}/>)}</section>}
+    <Work portfolio={portfolio} index={number("work")}/>
+    <About portfolio={portfolio} index={number("about")}/>
+    {portfolio.experience.length > 0 && <ExperienceSection portfolio={portfolio} index={number("experience")}/>}
+    {sections.some(section => section.id === "credentials") && <Credentials portfolio={portfolio} index={number("credentials")}/>}
+    {portfolio.testimonials.length > 0 && <Testimonials portfolio={portfolio}/>}
+    <Contact portfolio={portfolio} index={number("contact")}/>
+  </SiteChrome>;
+}
+
+function Hero({ portfolio }: { portfolio: Portfolio }) {
+  const goTo = useSectionNav();
+  const role = useTypewriter(portfolio.roles.length ? portfolio.roles : [portfolio.designation]);
+  const time = useLocalTime(portfolio.timezone);
+  const tilt = usePointerTilt<HTMLElement>(10);
+  // Text wrapped in *asterisks* is highlighted, e.g. "I turn complex workflows into *fast, reliable* products."
+  const plainHeadline = portfolio.headline.replace(/\*/g, "");
+  const words = portfolio.headline.split("*").flatMap((part, segment) => part.split(" ").filter(Boolean).map(text => ({ text, accent: segment % 2 === 1 })));
+  const featured = portfolio.projects.slice(0, 3);
+
+  return <section className="hero" id="top">
+    <div className="hero-glow" aria-hidden="true"/>
+    <div className="hero-main">
+      <div className="hero-badges">
+        <span className={portfolio.openToWork ? "badge badge-live" : "badge"}><span className="pulse-dot"/>{portfolio.openToWork ? "Open to new opportunities" : portfolio.availability}</span>
+        {time && <span className="badge badge-quiet"><Clock size={13}/>{time} in {portfolio.location.split(",")[0] || "my city"}</span>}
+      </div>
+      <p className="hero-role">{portfolio.designation} <span aria-hidden="true">·</span> <span className="typewriter" aria-label={portfolio.roles.join(", ")}>{role}<i aria-hidden="true"/></span></p>
+      <h1 aria-label={plainHeadline}>{words.map((word, index) => <span key={index} className={word.accent ? "word accent" : "word"} aria-hidden="true" style={{ animationDelay: `${120 + index * 55}ms` }}>{word.text}{" "}</span>)}</h1>
+      <p className="hero-intro">{portfolio.introduction}</p>
+      <div className="hero-actions">
+        <button className="primary-button" data-magnetic="0.25" onClick={() => goTo("work")}>Explore my work <ArrowDown size={17}/></button>
+        {portfolio.cvUrl
+          ? <a className="ghost-button" data-magnetic="0.25" href={fileUrl(`${portfolio.cvUrl}?download=1`)} onClick={() => track("cv")}>Download CV <Download size={16}/></a>
+          : <a className="ghost-button" data-magnetic="0.25" href="/#contact" onClick={event => { event.preventDefault(); goTo("contact"); }}>Get in touch <ArrowUpRight size={16}/></a>}
+        <div className="hero-socials">
+          {portfolio.github && <a href={portfolio.github} target="_blank" rel="noreferrer" aria-label="GitHub" onClick={() => track("outbound", "github")}><GithubIcon size={18}/></a>}
+          {portfolio.linkedin && <a href={portfolio.linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn" onClick={() => track("outbound", "linkedin")}><LinkedinIcon size={18}/></a>}
+        </div>
+      </div>
+    </div>
+
+    <aside className="hero-card" aria-label="Profile summary" ref={tilt}>
+      <div className="profile-card">
+        <div className="profile-top">
+          <div className="avatar-ring">{portfolio.photo ? <img src={fileUrl(portfolio.photo)} alt={portfolio.name}/> : <span>{initials(portfolio.name)}</span>}</div>
+          <div className="profile-id">
+            <strong>{portfolio.name}</strong>
+            <span>{portfolio.designation}</span>
+            {portfolio.location && <small><MapPin size={13}/>{portfolio.location}</small>}
+          </div>
+        </div>
+        <dl className="profile-facts">
+          <div><dt>Experience</dt><dd>{portfolio.years}+ yrs</dd></div>
+          <div><dt>Projects</dt><dd>{portfolio.projects.length}</dd></div>
+          <div><dt>Skills</dt><dd>{portfolio.skills.length}+</dd></div>
+        </dl>
+        <pre className="profile-code"><code>
+          <span className="tk-key">const</span> <span className="tk-var">{(portfolio.name.split(" ")[0] || "me").toLowerCase()}</span> = {"{"}{"\n"}
+          {"  "}stack: [{portfolio.skills.slice(0, 3).map((skill, index) => <span key={skill}><span className="tk-str">"{skill.replace(/\s*[\d–-]+$/, "")}"</span>{index < Math.min(3, portfolio.skills.length) - 1 ? ", " : ""}</span>)}],{"\n"}
+          {"  "}openToWork: <span className="tk-key">{String(portfolio.openToWork)}</span>,{"\n"}
+          {"}"};<span className="caret" aria-hidden="true"/>
+        </code></pre>
+      </div>
+      {featured.length > 0 && <div className="hero-featured">
+        <span>Recent work</span>
+        {featured.map(project => <Link key={project.id} to={`/work/${project.id}`} viewTransition className={`hero-project theme-${project.theme}`}><i/>{project.title}<ArrowUpRight size={14}/></Link>)}
+      </div>}
+    </aside>
+
+    <button className="scroll-cue" onClick={() => goTo("work")}><span>Scroll</span><ArrowDown size={15}/></button>
+  </section>;
+}
+
+function StatTile({ stat }: { stat: Stat }) {
+  const { ref, display } = useCountUp(stat.value);
+  return <div className="stat" data-reveal><strong ref={ref as React.RefObject<HTMLElement>}>{display}</strong><span>{stat.label}</span></div>;
+}
+
+function SectionHeading({ index, kicker, title, accent, text }: { index: string; kicker: string; title: string; accent: string; text?: string }) {
+  return <div className="section-heading" data-reveal>
+    <div><span className="section-index" data-scramble>{index} / {kicker}</span><h2>{title}<br/><em>{accent}</em></h2></div>
+    {text && <p>{text}</p>}
+  </div>;
+}
+
+function Work({ portfolio, index }: { portfolio: Portfolio; index: string }) {
+  const [filter, setFilter] = useState("All");
+  const tags = useMemo(() => {
+    const counts = new Map<string, number>();
+    portfolio.projects.forEach(project => project.stack.forEach(tag => counts.set(tag, (counts.get(tag) ?? 0) + 1)));
+    return ["All", ...[...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([tag]) => tag)];
+  }, [portfolio.projects]);
+  const projects = filter === "All" ? portfolio.projects : portfolio.projects.filter(project => project.stack.includes(filter));
+  useReveal([filter]);
+
+  return <section className="section-wrap" id="work">
+    <SectionHeading index={index} kicker="SELECTED WORK" title="Work with" accent="purpose." text="Products built to solve real problems. Open any project for the full case study."/>
+    {portfolio.projects.length > 1 && <div className="filter-chips" role="toolbar" aria-label="Filter projects by technology">
+      {tags.map(tag => <button key={tag} className={filter === tag ? "chip active" : "chip"} aria-pressed={filter === tag} onClick={() => setFilter(tag)}>{tag}{tag !== "All" && <em>{portfolio.projects.filter(project => project.stack.includes(tag)).length}</em>}</button>)}
+    </div>}
+    <div className="project-grid">{projects.map((project, i) => <ProjectCard key={project.id} project={project} index={portfolio.projects.indexOf(project)} wide={project.featured && i === 0 && projects.length > 2}/>)}</div>
+    {portfolio.projects.length === 0 && <p className="empty-copy">Selected work is coming soon.</p>}
+  </section>;
+}
+
+function ProjectCard({ project, index, wide }: { project: Project; index: number; wide: boolean }) {
+  const ref = useRef<HTMLElement>(null);
+  const tilt = (event: PointerEvent<HTMLElement>) => {
+    if (prefersReducedMotion() || event.pointerType !== "mouse" || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    ref.current.style.setProperty("--rx", `${((event.clientY - rect.top) / rect.height - 0.5) * -5}deg`);
+    ref.current.style.setProperty("--ry", `${((event.clientX - rect.left) / rect.width - 0.5) * 6}deg`);
+    ref.current.style.setProperty("--gx", `${event.clientX - rect.left}px`);
+    ref.current.style.setProperty("--gy", `${event.clientY - rect.top}px`);
+  };
+  const reset = () => { ref.current?.style.setProperty("--rx", "0deg"); ref.current?.style.setProperty("--ry", "0deg"); };
+
+  return <article ref={ref} className={`project-card theme-${project.theme}${wide ? " wide" : ""}`} data-reveal onPointerMove={tilt} onPointerLeave={reset}>
+    <Link to={`/work/${project.id}`} viewTransition className="project-card-link" aria-label={`${project.title} case study`}/>
+    <ProjectArt project={project} parallax/>
+    <div className="project-info">
+      <div className="project-top"><span>{String(index + 1).padStart(2, "0")} / {project.year || "CASE STUDY"}</span><span className="project-category">{project.category}</span></div>
+      <h3>{project.title}{project.featured && <Sparkles size={16} aria-label="Featured"/>}</h3>
+      <p>{project.summary}</p>
+      <div className="tag-row">{project.stack.slice(0, 5).map(tag => <span key={tag}>{tag}</span>)}{project.stack.length > 5 && <span>+{project.stack.length - 5}</span>}</div>
+      <div className="project-actions">
+        <span className="text-link">Read case study <ArrowRight size={16}/></span>
+        {project.url && <a className="text-link muted" href={project.url} target="_blank" rel="noreferrer" onClick={() => track("project_click", project.id)}>Live <ArrowUpRight size={15}/></a>}
+      </div>
+    </div>
+  </article>;
+}
+
+const CAPABILITY_ICONS = [<Layers size={20}/>, <Workflow size={20}/>, <Palette size={20}/>, <ServerCog size={20}/>, <Gauge size={20}/>, <ShieldCheck size={20}/>];
+
+// Pick an icon from the group's name; anything unrecognised gets a sparkle.
+const GROUP_ICONS: [RegExp, React.ReactNode][] = [
+  [/front|ui|web|client/i, <Monitor size={15}/>],
+  [/state|data|api/i, <Workflow size={15}/>],
+  [/back|server|database|db/i, <ServerCog size={15}/>],
+  [/cloud|devops|delivery|deploy|tool/i, <Cloud size={15}/>],
+  [/design|ux/i, <Palette size={15}/>],
+  [/test|quality|qa/i, <ShieldCheck size={15}/>],
+];
+const groupIcon = (label: string) => GROUP_ICONS.find(([match]) => match.test(label))?.[1] ?? <Sparkles size={15}/>;
+
+function About({ portfolio, index }: { portfolio: Portfolio; index: string }) {
+  return <section className="about-section" id="about"><div className="section-wrap">
+    <div className="about-grid">
+      <div data-reveal><span className="section-index" data-scramble>{index} / ENGINEERING PROFILE</span><h2>Architecture first.<br/><em>Experience always.</em></h2></div>
+      <div className="about-copy" data-reveal>
+        <p>{portfolio.introduction}</p>
+        <div className="skill-groups">{portfolio.skillGroups.filter(group => group.skills.length).map(group => <div key={group.id} className="skill-group" data-reveal>
+          <span className="skill-group-label">{groupIcon(group.label)}{group.label}</span>
+          <div className="skills-cloud">{group.skills.map((skill, i) => <span key={skill} style={{ transitionDelay: `${i * 45}ms` }}>{skill}</span>)}</div>
+        </div>)}</div>
+      </div>
+    </div>
+    {portfolio.capabilities.length > 0 && <div className="capability-grid">{portfolio.capabilities.map((item, i) => <article key={item.title} data-reveal style={{ transitionDelay: `${i * 70}ms` }}><div className="capability-head"><span className="capability-icon">{CAPABILITY_ICONS[i % CAPABILITY_ICONS.length]}</span><span>{String(i + 1).padStart(2, "0")}</span></div><strong>{item.title}</strong><p>{item.text}</p></article>)}</div>}
+  </div></section>;
+}
+
+function ExperienceSection({ portfolio, index }: { portfolio: Portfolio; index: string }) {
+  const [open, setOpen] = useState<string>(portfolio.experience[0]?.id ?? "");
+  return <section className="section-wrap" id="experience">
+    <SectionHeading index={index} kicker="EXPERIENCE" title="Enterprise systems." accent="Built for production." text="From architecture and implementation through release and support."/>
+    <ol className="timeline">{portfolio.experience.map(item => {
+      const expanded = open === item.id;
+      return <li key={item.id} className={expanded ? "timeline-item open" : "timeline-item"} data-reveal>
+        <div className="timeline-dot" aria-hidden="true">{item.current && <span className="pulse-dot"/>}</div>
+        <div className="timeline-card">
+          <button className="timeline-head" aria-expanded={expanded} onClick={() => setOpen(expanded ? "" : item.id)}>
+            <div><p className="timeline-meta">{item.current && <b>CURRENT</b>}{item.period}{item.location && <> · {item.location}</>}</p><h3>{item.role}</h3><p className="timeline-company">{item.company}</p></div>
+            <ChevronRight size={20} className="timeline-chevron"/>
+          </button>
+          <div className="timeline-body"><div>
+            <p>{item.description}</p>
+            {item.highlights.length > 0 && <ul>{item.highlights.map((highlight, i) => <li key={i}><span>{String(i + 1).padStart(2, "0")}</span><p>{emphasize(highlight)}</p></li>)}</ul>}
+            {item.stack.length > 0 && <div className="tag-row">{item.stack.map(tag => <span key={tag}>{tag}</span>)}</div>}
+          </div></div>
+        </div>
+      </li>;
+    })}</ol>
+  </section>;
+}
+
+/** Renders text wrapped in *asterisks* as highlighted <strong>. */
+function emphasize(text: string) {
+  return text.split("*").map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part);
+}
+
+function Credentials({ portfolio, index }: { portfolio: Portfolio; index: string }) {
+  return <section className="section-wrap" id="credentials">
+    <SectionHeading index={index} kicker="CREDENTIALS" title="Always" accent="learning." text="Education, certifications and milestones along the way."/>
+    <div className="credential-grid">
+      {portfolio.education.map(item => <article key={item.id} className="credential" data-reveal><GraduationCap size={22}/><span>{item.period}</span><h3>{item.degree}</h3><p className="credential-org">{item.school}</p>{item.detail && <p>{item.detail}</p>}</article>)}
+      {portfolio.certifications.map(item => <article key={item.id} className="credential" data-reveal><Award size={22}/><span>{item.year}</span><h3>{item.name}</h3><p className="credential-org">{item.issuer}</p>{item.url && <a className="text-link" href={item.url} target="_blank" rel="noreferrer">View credential <ArrowUpRight size={14}/></a>}</article>)}
+      {portfolio.achievements.map(item => <article key={item.id} className="credential" data-reveal><Trophy size={22}/><span>{item.year}</span><h3>{item.title}</h3>{item.detail && <p>{item.detail}</p>}</article>)}
+    </div>
+  </section>;
+}
+
+function Testimonials({ portfolio }: { portfolio: Portfolio }) {
+  const [current, setCurrent] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const count = portfolio.testimonials.length;
   useEffect(() => {
-    const update = () => {
-      const distance = document.documentElement.scrollHeight - window.innerHeight;
-      setProgress(distance > 0 ? window.scrollY / distance * 100 : 0);
-      setShowScrollTop(window.scrollY > 600);
-    };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
-      if (entry.isIntersecting) { entry.target.classList.add("visible"); observer.unobserve(entry.target); }
-    }), { threshold: 0.13 });
-    document.querySelectorAll("[data-reveal]").forEach(element => observer.observe(element));
-    return () => { window.removeEventListener("scroll", update); observer.disconnect(); };
-  }, []);
+    if (count < 2 || paused || prefersReducedMotion()) return;
+    const timer = setInterval(() => setCurrent(i => (i + 1) % count), 7000);
+    return () => clearInterval(timer);
+  }, [count, paused]);
+  const item = portfolio.testimonials[Math.min(current, count - 1)];
+  return <section className="testimonials" id="testimonials" aria-label="Testimonials" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <div className="section-wrap" data-reveal>
+      <Quote size={40} className="quote-mark"/>
+      <blockquote key={current} className="testimonial"><p>{item.quote}</p><footer><strong>{item.name}</strong><span>{item.role}</span></footer></blockquote>
+      {count > 1 && <div className="testimonial-nav">
+        <button className="icon-button" aria-label="Previous testimonial" onClick={() => setCurrent(i => (i - 1 + count) % count)}><ChevronLeft size={18}/></button>
+        <div className="dots">{portfolio.testimonials.map((t, i) => <button key={t.id} aria-label={`Testimonial ${i + 1}`} aria-current={i === current} className={i === current ? "active" : ""} onClick={() => setCurrent(i)}/>)}</div>
+        <button className="icon-button" aria-label="Next testimonial" onClick={() => setCurrent(i => (i + 1) % count)}><ChevronRight size={18}/></button>
+      </div>}
+    </div>
+  </section>;
+}
 
-  useEffect(() => {
-    const ids = ["top", "work", "about", ...(portfolio.experience.length > 0 ? ["experience"] : []), "contact"];
-    const sections = ids.map(id => document.getElementById(id)).filter((el): el is HTMLElement => el !== null);
-    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
-      if (entry.isIntersecting) setActiveSection(entry.target.id);
-    }), { rootMargin: "-45% 0px -50% 0px", threshold: 0 });
-    sections.forEach(section => observer.observe(section));
-    return () => observer.disconnect();
-  }, [portfolio.experience.length]);
-
-  const initials = portfolio.name.split(" ").map(part => part[0]).slice(0, 2).join("").toUpperCase();
-  const scrollTo = (id: string) => { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); setMenuOpen(false); };
-  const copyEmail = async () => {
+function Contact({ portfolio, index }: { portfolio: Portfolio; index: string }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const time = useLocalTime(portfolio.timezone);
+  const copy = async () => {
     try {
       await navigator.clipboard.writeText(portfolio.email);
-      setEmailCopied(true);
-      setTimeout(() => setEmailCopied(false), 2000);
-    } catch { /* clipboard unavailable */ }
+      setCopied(true); toast("Email copied to clipboard"); track("email_copy");
+      setTimeout(() => setCopied(false), 2000);
+    } catch { toast("Couldn't copy — select the address instead", "error"); }
   };
-
-  return <main className="portfolio-site" onPointerMove={event => setPointer({ x: event.clientX / window.innerWidth * 100, y: (event.clientY + window.scrollY) / document.documentElement.scrollHeight * 100 })}>
-    <div className="pointer-aura" aria-hidden="true" style={{ left: `${pointer.x}%`, top: `${pointer.y}%` }}/>
-    <div className="scroll-progress" style={{ width: `${progress}%` }} />
-    <header className="site-header">
-      <a className="wordmark" href="#top" onClick={() => setMenuOpen(false)}><span className="wordmark-mark">{initials}</span><span>{portfolio.name}<small>PORTFOLIO / 2026</small></span></a>
-      <nav className={menuOpen ? "site-nav open" : "site-nav"} aria-label="Main navigation">
-        <button className={activeSection === "work" ? "active" : undefined} onClick={() => scrollTo("work")}>Work</button><button className={activeSection === "about" ? "active" : undefined} onClick={() => scrollTo("about")}>About</button>{portfolio.experience.length > 0 && <button className={activeSection === "experience" ? "active" : undefined} onClick={() => scrollTo("experience")}>Experience</button>}<button className={activeSection === "contact" ? "active" : undefined} onClick={() => scrollTo("contact")}>Contact</button>
-      </nav>
-      <a className="header-cta" href={`mailto:${portfolio.email}`}>Let&apos;s talk <ArrowUpRight size={16}/></a>
-      <button className="mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X/> : <Menu/>}</button>
-    </header>
-    <button className={showScrollTop ? "scroll-top visible" : "scroll-top"} aria-label="Scroll to top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp size={18}/></button>
-
-    <section className="portfolio-hero" id="top">
-      <div className="hero-grid" aria-hidden="true"/>
-      <div className="hero-orb hero-orb-one" aria-hidden="true"/><div className="hero-orb hero-orb-two" aria-hidden="true"/>
-      <div className="hero-main">
-        <div className="eyebrow"><span className="pulse-dot"/>{portfolio.availability}</div>
-        <p className="hero-role">{portfolio.designation} <span>— {portfolio.location}</span></p>
-        <div className="hero-kicker">ANGULAR × REACT × TYPESCRIPT</div>
-        <h1>{portfolio.headline}</h1>
-        <div className="hero-bottom"><p>{portfolio.introduction}</p><div className="hero-actions"><button onClick={() => scrollTo("work")}>Explore my work <ArrowUpRight size={18}/></button>{portfolio.cvUrl && <a href={portfolio.cvUrl} target="_blank" rel="noreferrer">Download CV <Download size={17}/></a>}</div></div>
+  return <section className="contact-section" id="contact"><div className="section-wrap contact-grid">
+    <div className="contact-intro" data-reveal>
+      <span className="section-index" data-scramble>{index} / LET&apos;S CONNECT</span>
+      <h2>Have something<br/><em>worth building?</em></h2>
+      <p>Tell me about the role, product or idea. Messages land straight in my inbox.</p>
+      {portfolio.email && <div className="email-row"><a className="email-link" href={`mailto:${portfolio.email}`}>{portfolio.email}</a><button className="icon-button" type="button" onClick={copy} aria-label="Copy email address">{copied ? <Check size={16}/> : <Copy size={16}/>}</button></div>}
+      <ul className="contact-facts">
+        {portfolio.location && <li><MapPin size={16}/>{portfolio.location}</li>}
+        {time && <li><Clock size={16}/>{time} local time</li>}
+      </ul>
+      <div className="contact-links">
+        {portfolio.github && <a href={portfolio.github} target="_blank" rel="noreferrer" onClick={() => track("outbound", "github")}><GithubIcon size={16}/> GitHub</a>}
+        {portfolio.linkedin && <a href={portfolio.linkedin} target="_blank" rel="noreferrer" onClick={() => track("outbound", "linkedin")}><LinkedinIcon size={16}/> LinkedIn</a>}
+        {portfolio.cvUrl && <a href={fileUrl(`${portfolio.cvUrl}?download=1`)} onClick={() => track("cv")}><Download size={16}/> CV</a>}
       </div>
-      <div className="hero-side" aria-hidden="true" style={{ transform: `translateY(${progress * .7}px)` }}><span>01 / INTRODUCTION</span><div className="monogram">{initials}</div><span>ENGINEERED FOR REAL-WORLD IMPACT</span></div>
-      <div className="code-float code-float-one" aria-hidden="true">&lt;state /&gt;</div><div className="code-float code-float-two" aria-hidden="true">observable$</div><div className="code-float code-float-three" aria-hidden="true">{"{ scale: enterprise }"}</div>
-      <button className="scroll-cue" onClick={() => scrollTo("work")}>Scroll to discover <ArrowDown size={17}/></button>
-    </section>
-
-    <section className="signal-bar" aria-label="Professional highlights"><div><strong>{portfolio.years}+</strong><span>Years delivering<br/>production software</span></div><div><strong>2</strong><span>Modern frontend<br/>ecosystems</span></div><div><strong>17+</strong><span>Enterprise Angular<br/>delivery</span></div><div><strong>E2E</strong><span>Architecture through<br/>production support</span></div></section>
-
-    <div className="ticker" aria-label="Core skills"><div>{[...portfolio.skills, ...portfolio.skills].map((skill, index) => <span key={`${skill}-${index}`}>{skill}<i>✳</i></span>)}</div></div>
-    <div className="motion-ribbon" aria-hidden="true"><div><span>SOFTWARE ENGINEERING</span><i>✦</i><span>ENTERPRISE ANGULAR</span><i>✦</i><span>REACTIVE SYSTEMS</span><i>✦</i><span>FULL-STACK DELIVERY</span><i>✦</i><span>SOFTWARE ENGINEERING</span><i>✦</i><span>ENTERPRISE ANGULAR</span><i>✦</i></div></div>
-
-    <section className="section-wrap work-section" id="work"><div className="section-heading" data-reveal><div><span className="section-index">01 / SELECTED WORK</span><h2>Work with <em>purpose.</em></h2></div><p>Products built to solve real problems and make every interaction count.</p></div>
-      <div className="project-grid">{portfolio.projects.map((project, index) => <article className={`project-card theme-${project.theme}`} key={project.id} data-reveal>
-        <div className="project-info"><div className="project-top"><span>CASE STUDY / {String(index + 1).padStart(2, "0")}</span><span className="project-category">{project.category}</span></div><div><h3>{project.title}</h3><p>{project.summary}</p></div><div className="project-stack">{project.stack.map(tag => <span key={tag}>{tag}</span>)}</div>{project.url ? <a className="project-link" href={project.url} target="_blank" rel="noreferrer">Explore live project <ArrowUpRight size={19}/></a> : <span className="project-link project-link-muted">Case study in progress</span>}</div>
-        <div className="project-art" aria-hidden="true"><div className="mock-browser"><div className="mock-toolbar"><i/><i/><i/><span>{project.url ? new URL(project.url).hostname : `${project.title.toLowerCase().replace(/\s+/g, "-")}.app`}</span></div>{project.image ? <div className="mock-content mock-image"><img src={project.image} alt="" loading="lazy" /></div> : project.id === "online-food" ? <div className="mock-content food-mock"><div className="mock-app-nav"><b>goodfood<span>.</span></b><span>Discover　 Restaurants　 Offers</span><i/></div><div className="food-mock-body"><div className="food-mock-copy"><small>GOOD FOOD, GOOD MOOD</small><strong>Cravings meet<br/>their match.</strong><div className="mock-search">What are you craving today?　⌕</div></div><div className="food-bowl"><span>✺</span></div></div><div className="food-mini"><i/><i/><i/><i/></div></div> : project.id === "scenepass" ? <div className="mock-content scene-mock"><div className="mock-app-nav"><b>SCENE<span>PASS</span></b><span>Explore　 Events　 Experiences</span><i/></div><div className="scene-mock-body"><div className="scene-poster"><span>LIVE / 2026</span><strong>THE<br/>NEXT<br/>SCENE</strong><small>Discover what moves you →</small></div><div className="scene-side"><span>01 / FEATURED</span><div/><div/><div/></div></div></div> : <div className="mock-content generic-mock"><span>FEATURED PROJECT</span><strong>{project.title}</strong><small>{project.category}</small><div className="generic-shapes"><i/><i/><i/></div></div>}</div></div>
-      </article>)}</div>
-      {portfolio.projects.length === 0 && <p className="empty-copy">Selected work is coming soon.</p>}
-    </section>
-
-    <section className="about-section" id="about"><div className="section-wrap"><div className="about-grid"><div data-reveal><span className="section-index">02 / ENGINEERING PROFILE</span><h2>Architecture first.<br/><em>Experience always.</em></h2></div><div className="about-copy" data-reveal><p>{portfolio.introduction}</p><div className="skills-list">{portfolio.skills.map(skill => <span key={skill}>{skill}</span>)}</div></div></div><div className="capability-grid"><article data-reveal><span>01</span><strong>State architecture</strong><p>Predictable NgRx stores, selectors and effects for multi-step, business-critical journeys.</p></article><article data-reveal><span>02</span><strong>Reactive systems</strong><p>RxJS orchestration that prevents redundant requests and keeps asynchronous interfaces resilient.</p></article><article data-reveal><span>03</span><strong>Design engineering</strong><p>Responsive, accessible component systems that stay consistent as products and teams grow.</p></article><article data-reveal><span>04</span><strong>Full-stack delivery</strong><p>REST integrations, Node services, MongoDB data flows, CI/CD and production ownership.</p></article></div></div></section>
-
-    {portfolio.experience.length > 0 && <section className="experience-section" id="experience"><div className="section-wrap"><div className="section-heading" data-reveal><div><span className="section-index">03 / EXPERIENCE</span><h2>Enterprise systems.<br/><em>Built for production.</em></h2></div><p>Delivering business-critical insurance products from architecture and implementation through release and support.</p></div><div className="experience-list">{portfolio.experience.map(item => <article key={item.id} data-reveal><div className="experience-meta"><span className="live-dot"/>CURRENT POSITION<span>{item.period}</span><span>{item.location}</span></div><div className="experience-body"><div className="experience-intro"><p className="experience-company">{item.company}</p><h3>{item.role}</h3><p>{item.description}</p><div className="experience-stack"><span>Angular</span><span>TypeScript</span><span>RxJS</span><span>NgRx</span><span>React</span><span>AWS</span></div></div><div className="experience-outcomes"><p className="outcomes-label">SELECTED CONTRIBUTIONS</p><ul>{item.highlights?.map((highlight, index) => <li key={highlight}><span>{String(index + 1).padStart(2, "0")}</span>{highlight}</li>)}</ul></div></div></article>)}</div></div></section>}
-
-    <section className="contact-section" id="contact"><div className="section-wrap contact-inner" data-reveal><span className="section-index">{portfolio.experience.length > 0 ? "04" : "03"} / LET&apos;S CONNECT</span><h2>Have something<br/><em>worth building?</em></h2><div className="email-row"><a className="email-link" href={`mailto:${portfolio.email}`}>{portfolio.email}<ArrowUpRight/></a><button className="email-copy" type="button" onClick={copyEmail} aria-label="Copy email address">{emailCopied ? <Check size={16}/> : <Copy size={16}/>}{emailCopied ? "Copied" : "Copy"}</button></div><div className="contact-footer"><span>{portfolio.name} · {portfolio.designation}</span><div>{portfolio.github && <a href={portfolio.github} target="_blank" rel="noreferrer"><ArrowUpRight size={17}/> GitHub</a>}{portfolio.linkedin && <a href={portfolio.linkedin} target="_blank" rel="noreferrer"><ArrowUpRight size={17}/> LinkedIn</a>}{portfolio.cvUrl && <a href={portfolio.cvUrl} target="_blank" rel="noreferrer"><Download size={17}/> CV</a>}</div></div></div></section>
-    <footer className="site-footer"><span>© {new Date().getFullYear()} {portfolio.name}</span><span>Software engineered with intention.</span><Link to="/owner-login">Owner studio <ArrowRight size={14}/></Link></footer>
-  </main>;
+    </div>
+    <div data-reveal><ContactForm ownerName={portfolio.name}/></div>
+  </div></section>;
 }
